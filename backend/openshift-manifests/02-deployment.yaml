@@ -1,0 +1,89 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cluster-upgrade-calendar-data
+  namespace: open-cluster-management
+  labels:
+    app.kubernetes.io/name: cluster-upgrade-calendar
+    app.kubernetes.io/component: backend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  # Storage class can be adjusted based on the cluster
+  # Uncomment and modify if you have specific storage class
+  # storageClassName: standard
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cluster-upgrade-calendar-backend
+  namespace: open-cluster-management
+  labels:
+    app.kubernetes.io/name: cluster-upgrade-calendar
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cluster-upgrade-calendar
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cluster-upgrade-calendar
+        app.kubernetes.io/component: backend
+      annotations:
+        checksum/config: "1" # Trigger rollout on ConfigMap change
+    spec:
+      serviceAccountName: cluster-upgrade-calendar
+      containers:
+        - name: backend
+          image: registry.example.com/cluster-upgrade-calendar-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: cluster-upgrade-calendar-config
+          env:
+            - name: DB_PATH
+              value: "/data/events.db"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+              subPath: ""
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: cluster-upgrade-calendar-data
+      tolerations: []
+      affinity: {}

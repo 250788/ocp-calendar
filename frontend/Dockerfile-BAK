@@ -1,0 +1,43 @@
+# Build stage
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+RUN if [ -f package-lock.json ]; then npm ci --only=production && npm cache clean --force; else npm install --only=production && npm cache clean --force; fi
+
+# Copy source files
+COPY . .
+
+# We're using CDNs for FullCalendar and Axios, so no build step needed
+# This stage is just for copying files
+
+# Production stage - using nginx to serve static files
+FROM docker.io/nginx:1.25-alpine
+
+# Remove default nginx configuration from base image to avoid conflicts
+RUN rm -f /etc/nginx/conf.d/default.conf
+
+# Set default backend service address (can be overridden at runtime)
+ENV BACKEND_SERVICE=cluster-upgrade-calendar-backend.open-cluster-management.svc.cluster.local:3000
+
+# Copy custom nginx configuration as template (processed by entrypoint)
+COPY nginx.conf /etc/nginx/nginx.conf.template
+
+# Copy built application from builder
+COPY --from=builder /app /usr/share/nginx/html
+
+# Set proper permissions
+RUN chmod -R 755 /usr/share/nginx/html && \
+    chown -R nginx:nginx /usr/share/nginx/html
+
+# Expose port 80
+EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
+
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]

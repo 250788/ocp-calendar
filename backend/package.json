@@ -1,0 +1,32 @@
+{
+  "name": "cluster-upgrade-calendar-backend",
+  "version": "1.0.0",
+  "description": "Backend API for OpenShift cluster upgrade scheduling with ACM policies",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0",
+    "winston": "^3.11.0",
+    "better-sqlite3": "^9.2.2",
+    "@kubernetes/client-node": "^1.4.0",
+    "uuid": "^9.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "openshift",
+    "acm",
+    "upgrade",
+    "calendar"
+  ],
+  "author": "",
+  "license": "MIT"
+}

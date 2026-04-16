@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenShift Cluster Upgrade Scheduler</title>
+
+  <!-- FullCalendar -->
+  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/index.global.min.js'></script>
+
+  <!-- Axios for API calls -->
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.6.5/dist/axios.min.js"></script>
+
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>OpenShift Cluster Upgrade Scheduler</h1>
+      <p class="subtitle">Schedule and manage OpenShift cluster upgrades via ACM policies</p>
+    </header>
+
+    <main class="main">
+      <div class="toolbar">
+        <div class="view-switcher">
+          <button class="btn btn-view active" data-view="dayGridDay">Day</button>
+          <button class="btn btn-view" data-view="dayGridWeek">Week</button>
+          <button class="btn btn-view" data-view="dayGridMonth">Month</button>
+        </div>
+        <button class="btn btn-primary" id="add-event-btn">
+          <span>+ Add Upgrade</span>
+        </button>
+      </div>
+
+      <div id="calendar"></div>
+
+      <!-- Loading overlay for async operations -->
+      <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <span class="loading-spinner"></span>
+        <span>Loading events...</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-value" id="total-events">0</span>
+          <span class="stat-label">Upgrades Scheduled</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="active-policies">0</span>
+          <span class="stat-label">Active Policies</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="pending-policies">0</span>
+          <span class="stat-label">Pending</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Add Event Modal -->
+    <div id="event-modal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Schedule Cluster Upgrade</h2>
+          <button class="modal-close" id="close-modal">&times;</button>
+        </div>
+
+        <form id="event-form">
+          <div class="form-group">
+            <label for="event-title">Upgrade Title *</label>
+            <input type="text" id="event-title" name="title" required
+                   placeholder="e.g., Q1 Production Cluster Upgrade"
+                   maxlength="100">
+          </div>
+
+          <div class="form-group">
+            <label for="cluster-name">Managed Cluster Name *</label>
+            <input type="text" id="cluster-name" name="cluster_name" required
+                   placeholder="e.g., production-cluster-1"
+                   pattern="[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9]"
+                   title="Cluster name must be alphanumeric with optional hyphens">
+            <small class="help-text">The exact name as registered in ACM</small>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="scheduled-date">Date *</label>
+              <input type="date" id="scheduled-date" name="scheduled_date" required>
+            </div>
+
+            <div class="form-group">
+              <label for="start-time">Start Time *</label>
+              <input type="time" id="start-time" name="start_time" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="duration-minutes">Duration (minutes) *</label>
+            <input type="number" id="duration-minutes" name="duration_minutes" required
+                   min="15" max="480" value="120">
+            <small class="help-text">Expected upgrade window (15-480 minutes)</small>
+          </div>
+
+          <div class="form-group">
+            <label for="openshift-version">Target OpenShift Version *</label>
+            <input type="text" id="openshift-version" name="openshift_version" required
+                   placeholder="e.g., 4.14.0"
+                   pattern="4\.[0-9]+\.[0-9]+"
+                   title="Version format: X.XX.X">
+            <small class="help-text">Semantic version format (e.g., 4.14.0, 4.15.0)</small>
+          </div>
+
+          <div class="form-group">
+            <label for="notes">Notes</label>
+            <textarea id="notes" name="notes" rows="3"
+                      placeholder="Additional details, prerequisites, rollback plan, etc."></textarea>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
+            <button type="submit" class="btn btn-primary">
+              <span id="submit-btn-text">Schedule Upgrade</span>
+            </button>
+          </div>
+        </form>
+
+        <div id="form-error" class="error-message" style="display: none;"></div>
+        <div id="form-success" class="success-message" style="display: none;"></div>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-modal" class="modal">
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h2>Cancel Upgrade</h2>
+          <button class="modal-close" id="close-delete-modal">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <p>Are you sure you want to cancel this scheduled upgrade?</p>
+          <p class="warning">
+            This will:
+          </p>
+          <ul>
+            <li>Remove the upgrade schedule from the calendar</li>
+            <li>Delete the associated ACM policy</li>
+          </ul>
+          <p class="info">
+            This action cannot be undone.
+          </p>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="cancel-delete-btn">Keep Upgrade</button>
+          <button type="button" class="btn btn-danger" id="confirm-delete-btn">Cancel Upgrade</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Event Details Modal -->
+    <div id="details-modal" class="modal">
+      <div class="modal-content modal-sm">
+        <div class="modal-header">
+          <h2>Upgrade Details</h2>
+          <button class="modal-close" id="close-details-modal">&times;</button>
+        </div>
+
+        <div class="modal-body" id="event-details">
+          <!-- Event details will be populated here -->
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="close-details-btn">Close</button>
+          <button type="button" class="btn btn-danger" id="delete-event-btn">Cancel Upgrade</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

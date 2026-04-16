@@ -1,0 +1,56 @@
+---
+# This manifest should be applied to each managed cluster that will receive
+# upgrade CronJobs from ACM. These resources are needed for the CronJob
+# to execute OpenShift upgrades.
+#
+# Apply to managed clusters before scheduling upgrades:
+#   oc apply -f 50-managed-cluster-rbac.yaml -n openshift-upgrade
+#
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openshift-upgrade
+  labels:
+    app.kubernetes.io/name: openshift-upgrade
+    purpose: cluster-upgrade-scheduler
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-upgrade-calendar
+  namespace: openshift-upgrade
+  labels:
+    app.kubernetes.io/name: openshift-upgrade
+    purpose: cluster-upgrade-scheduler
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: openshift-upgrade-admin
+  labels:
+    app.kubernetes.io/name: openshift-upgrade
+    purpose: cluster-upgrade-scheduler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: cluster-upgrade-calendar
+  namespace: openshift-upgrade
+---
+# Optional: Create the namespace on managed clusters if it doesn't exist
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: openshift-upgrade-limits
+  namespace: openshift-upgrade
+spec:
+  limits:
+  - default:
+      memory: "512Mi"
+      cpu: "500m"
+    defaultRequest:
+      memory: "128Mi"
+      cpu: "100m"
+    type: Container

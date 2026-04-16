@@ -369,7 +369,7 @@ function hideMessages() {
 
 // Escape HTML to prevent XSS
 function escapeHtml(text) {
-  if (!text) return '';
+  if (!text) return ''; 
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
@@ -493,6 +493,7 @@ async function handleDeleteEvent() {
 
   const eventId = selectedEvent.id;
   hideDeleteConfirmation();
+  showLoadingOverlay(true);
 
   try {
     await api.delete(`/api/events/${eventId}`);
@@ -508,12 +509,17 @@ async function handleDeleteEvent() {
     })));
 
     closeDetailsModal();
-    alert('Upgrade cancelled and ACM policy deleted.');
+    showSuccess('Upgrade cancelled and ACM policy deleted successfully.');
+    
+    // Reload events to ensure consistency
+    setTimeout(loadEvents, 1500);
   } catch (error) {
     console.error('Failed to delete event:', error);
-    alert(`Failed to cancel upgrade: ${error.message}`);
+    const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
+    showError(`Failed to cancel upgrade: ${errorMsg}`);
   } finally {
     isDeletingEvent = false;
+    showLoadingOverlay(false);
   }
 }
 
